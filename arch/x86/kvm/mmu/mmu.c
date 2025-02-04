@@ -1915,7 +1915,7 @@ static bool kvm_sync_page_check(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp)
 	 */
 	const union kvm_mmu_page_role sync_role_ign = {
 		.level = 0xf,
-		.access = 0x7,
+		.access = 0xf,
 		.quadrant = 0x3,
 		.passthrough = 0x1,
 	};

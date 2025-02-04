@@ -22,10 +22,16 @@
 	__entry->root_count = sp->root_count;		\
 	__entry->unsync = sp->unsync;
 
+/*
+ * X == ACC_EXEC_MASK: executable without guest_exec_control and only
+ *                     supervisor execute with guest exec control
+ * x == ACC_USER_EXEC_MASK: user execute with guest exec control
+ */
 #define KVM_MMU_PAGE_PRINTK() ({				        \
 	const char *saved_ptr = trace_seq_buffer_ptr(p);		\
 	static const char *access_str[] = {			        \
-		"---", "--x", "w--", "w-x", "-u-", "-ux", "wu-", "wux"  \
+		"----", "---X", "-w--", "-w-X", "--u-", "--uX", "-wu-", "-wuX", \
+		"x---", "x--X", "xw--", "xw-X", "xu--", "x-uX", "xwu-", "xwuX"	\
 	};							        \
 	union kvm_mmu_page_role role;				        \
 								        \
