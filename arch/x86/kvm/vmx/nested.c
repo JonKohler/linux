@@ -7099,6 +7099,10 @@ static void nested_vmx_setup_secondary_ctls(u32 ept_caps,
 		 */
 		if (cpu_has_vmx_vmfunc())
 			msrs->vmfunc_controls = VMX_VMFUNC_EPTP_SWITCHING;
+
+		if (enable_pt_guest_exec_control)
+			msrs->secondary_ctls_high |=
+				SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
 	}
 
 	/*
