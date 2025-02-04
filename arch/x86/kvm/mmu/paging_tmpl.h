@@ -181,8 +181,9 @@ static inline unsigned FNAME(gpte_access)(u64 gpte)
 	unsigned access;
 #if PTTYPE == PTTYPE_EPT
 	access = ((gpte & VMX_EPT_WRITABLE_MASK) ? ACC_WRITE_MASK : 0) |
-		((gpte & VMX_EPT_EXECUTABLE_MASK) ? ACC_EXEC_MASK : 0) |
-		((gpte & VMX_EPT_READABLE_MASK) ? ACC_USER_MASK : 0);
+		 ((gpte & VMX_EPT_EXECUTABLE_MASK) ? ACC_EXEC_MASK : 0) |
+		 ((gpte & VMX_EPT_USER_EXECUTABLE_MASK) ? ACC_USER_EXEC_MASK : 0) |
+		 ((gpte & VMX_EPT_READABLE_MASK) ? ACC_USER_MASK : 0);
 #else
 	BUILD_BUG_ON(ACC_EXEC_MASK != PT_PRESENT_MASK);
 	BUILD_BUG_ON(ACC_EXEC_MASK != 1);
@@ -510,7 +511,15 @@ error:
 		 * Note, pte_access holds the raw RWX bits from the EPTE, not
 		 * ACC_*_MASK flags!
 		 */
-		walker->fault.exit_qualification |= EPT_VIOLATION_RWX_TO_PROT(pte_access);
+		walker->fault.exit_qualification |=
+			EPT_VIOLATION_READ_TO_PROT(pte_access);
+		walker->fault.exit_qualification |=
+			EPT_VIOLATION_WRITE_TO_PROT(pte_access);
+		walker->fault.exit_qualification |=
+			EPT_VIOLATION_EXEC_TO_PROT(pte_access);
+		if (vcpu->arch.pt_guest_exec_control)
+			walker->fault.exit_qualification |=
+				EPT_VIOLATION_USER_EXEC_TO_PROT(pte_access);
 	}
 #endif
 	walker->fault.address = addr;

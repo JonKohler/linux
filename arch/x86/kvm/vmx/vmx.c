@@ -5784,7 +5784,7 @@ static int handle_task_switch(struct kvm_vcpu *vcpu)
 
 static int handle_ept_violation(struct kvm_vcpu *vcpu)
 {
-	unsigned long exit_qualification;
+	unsigned long exit_qualification, rwx_mask;
 	gpa_t gpa;
 	u64 error_code;
 
@@ -5814,7 +5814,10 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
 	error_code |= (exit_qualification & EPT_VIOLATION_ACC_INSTR)
 		      ? PFERR_FETCH_MASK : 0;
 	/* ept page table entry is present? */
-	error_code |= (exit_qualification & EPT_VIOLATION_PROT_MASK)
+	rwx_mask = EPT_VIOLATION_PROT_MASK;
+	if (vcpu->arch.pt_guest_exec_control)
+		rwx_mask |= EPT_VIOLATION_PROT_USER_EXEC;
+	error_code |= (exit_qualification & rwx_mask)
 		      ? PFERR_PRESENT_MASK : 0;
 
 	if (error_code & EPT_VIOLATION_GVA_IS_VALID)
