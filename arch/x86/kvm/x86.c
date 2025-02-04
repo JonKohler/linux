@@ -197,6 +197,10 @@ module_param(eager_page_split, bool, 0644);
 static bool __read_mostly mitigate_smt_rsb;
 module_param(mitigate_smt_rsb, bool, 0444);
 
+bool __read_mostly enable_pt_guest_exec_control;
+EXPORT_SYMBOL_GPL(enable_pt_guest_exec_control);
+module_param(enable_pt_guest_exec_control, bool, 0444);
+
 /*
  * Restoring the host value for MSRs that are only consumed when running in
  * usermode, e.g. SYSCALL MSRs and TSC_AUX, can be deferred until the CPU
