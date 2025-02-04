@@ -197,7 +197,7 @@ module_param(eager_page_split, bool, 0644);
 static bool __read_mostly mitigate_smt_rsb;
 module_param(mitigate_smt_rsb, bool, 0444);
 
-bool __read_mostly enable_pt_guest_exec_control;
+bool __read_mostly enable_pt_guest_exec_control = true;
 EXPORT_SYMBOL_GPL(enable_pt_guest_exec_control);
 module_param(enable_pt_guest_exec_control, bool, 0444);
 
