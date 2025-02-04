@@ -856,6 +856,8 @@ struct kvm_vcpu_arch {
 	struct kvm_hypervisor_cpuid kvm_cpuid;
 	bool is_amd_compatible;
 
+	bool pt_guest_exec_control;
+
 	/*
 	 * FIXME: Drop this macro and use KVM_NR_GOVERNED_FEATURES directly
 	 * when "struct kvm_vcpu_arch" is no longer defined in an
