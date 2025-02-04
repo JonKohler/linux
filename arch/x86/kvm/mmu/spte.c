@@ -178,6 +178,9 @@ bool make_spte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 	else if (kvm_mmu_page_ad_need_write_protect(sp))
 		spte |= SPTE_TDP_AD_WRPROT_ONLY;
 
+	// For LKML Review:
+	// In MBEC case, you can have exec only and also bit 10
+	// set for user exec only. Do we need to cater for that here?
 	spte |= shadow_present_mask;
 	if (!prefetch)
 		spte |= spte_shadow_accessed_mask(spte);
@@ -197,12 +200,31 @@ bool make_spte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 	if (level > PG_LEVEL_4K && (pte_access & ACC_EXEC_MASK) &&
 	    is_nx_huge_page_enabled(vcpu->kvm)) {
 		pte_access &= ~ACC_EXEC_MASK;
+		if (vcpu->arch.pt_guest_exec_control)
+			pte_access &= ~ACC_USER_EXEC_MASK;
 	}
 
-	if (pte_access & ACC_EXEC_MASK)
-		spte |= shadow_x_mask;
-	else
-		spte |= shadow_nx_mask;
+	// For LKML Review:
+	// We could probably optimize the logic here, but typing it out
+	// long hand for now to make it clear how we're changing the control
+	// flow to support MBEC.
+	if (!vcpu->arch.pt_guest_exec_control) { // non-mbec logic
+		if (pte_access & ACC_EXEC_MASK)
+			spte |= shadow_x_mask;
+		else
+			spte |= shadow_nx_mask;
+	} else { // mbec logic
+		if (pte_access & ACC_EXEC_MASK) { /* mbec: kernel exec */
+			if (pte_access & ACC_USER_EXEC_MASK)
+				spte |= shadow_x_mask | shadow_ux_mask; // KMX = 1, UMX = 1
+			else
+				spte |= shadow_x_mask;  // KMX = 1, UMX = 0
+		} else if (pte_access & ACC_USER_EXEC_MASK) { /* mbec: user exec, no kernel exec */
+			spte |= shadow_ux_mask; // KMX = 0, UMX = 1
+		} else { /* mbec: nx */
+			spte |= shadow_nx_mask; // KMX = 0, UMX = 0
+		}
+	}
 
 	if (pte_access & ACC_USER_MASK)
 		spte |= shadow_user_mask;

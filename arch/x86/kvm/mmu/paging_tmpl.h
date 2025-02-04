@@ -840,6 +840,9 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault
 		 * then we should prevent the kernel from executing it
 		 * if SMEP is enabled.
 		 */
+		// FOR REVIEW:
+		// ACC_USER_EXEC_MASK seems not necessary to add here since
+		// SMEP is for kernel-only.
 		if (is_cr4_smep(vcpu->arch.mmu))
 			walker.pte_access &= ~ACC_EXEC_MASK;
 	}
