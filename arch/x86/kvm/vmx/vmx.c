@@ -8510,7 +8510,8 @@ __init int vmx_hardware_setup(void)
 
 	if (enable_ept)
 		kvm_mmu_set_ept_masks(enable_ept_ad_bits,
-				      cpu_has_vmx_ept_execute_only());
+				      cpu_has_vmx_ept_execute_only(),
+				      enable_pt_guest_exec_control);
 
 	/*
 	 * Setup shadow_me_value/shadow_me_mask to include MKTME KeyID

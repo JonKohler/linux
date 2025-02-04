@@ -28,6 +28,7 @@ u64 __read_mostly shadow_host_writable_mask;
 u64 __read_mostly shadow_mmu_writable_mask;
 u64 __read_mostly shadow_nx_mask;
 u64 __read_mostly shadow_x_mask; /* mutual exclusive with nx_mask */
+u64 __read_mostly shadow_ux_mask;
 u64 __read_mostly shadow_user_mask;
 u64 __read_mostly shadow_accessed_mask;
 u64 __read_mostly shadow_dirty_mask;
@@ -313,8 +314,14 @@ u64 make_huge_page_split_spte(struct kvm *kvm, u64 huge_spte,
 		 * the page executable as the NX hugepage mitigation no longer
 		 * applies.
 		 */
-		if ((role.access & ACC_EXEC_MASK) && is_nx_huge_page_enabled(kvm))
+		if ((role.access & ACC_EXEC_MASK) && is_nx_huge_page_enabled(kvm)) {
 			child_spte = make_spte_executable(child_spte);
+			// TODO: For LKML: switch to vcpu->arch.pt_guest_exec_control? up
+			// for suggestions on how best to toggle this.
+			if (enable_pt_guest_exec_control &&
+			    role.access & ACC_USER_EXEC_MASK)
+				child_spte |= shadow_ux_mask;
+		}
 	}
 
 	return child_spte;
@@ -326,7 +333,7 @@ u64 make_nonleaf_spte(u64 *child_pt, bool ad_disabled)
 	u64 spte = SPTE_MMU_PRESENT_MASK;
 
 	spte |= __pa(child_pt) | shadow_present_mask | PT_WRITABLE_MASK |
-		shadow_user_mask | shadow_x_mask | shadow_me_value;
+		shadow_user_mask | shadow_x_mask | shadow_ux_mask | shadow_me_value;
 
 	if (ad_disabled)
 		spte |= SPTE_TDP_AD_DISABLED;
@@ -420,7 +427,8 @@ void kvm_mmu_set_me_spte_mask(u64 me_value, u64 me_mask)
 }
 EXPORT_SYMBOL_GPL(kvm_mmu_set_me_spte_mask);
 
-void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only)
+void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only,
+			   bool has_guest_exec_ctrl)
 {
 	shadow_user_mask	= VMX_EPT_READABLE_MASK;
 	shadow_accessed_mask	= has_ad_bits ? VMX_EPT_ACCESS_BIT : 0ull;
@@ -428,8 +436,14 @@ void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only)
 	shadow_nx_mask		= 0ull;
 	shadow_x_mask		= VMX_EPT_EXECUTABLE_MASK;
 	/* VMX_EPT_SUPPRESS_VE_BIT is needed for W or X violation. */
+	// For LKML Review:
+	// Do we need to modify shadow_present_mask in the MBEC case?
 	shadow_present_mask	=
 		(has_exec_only ? 0ull : VMX_EPT_READABLE_MASK) | VMX_EPT_SUPPRESS_VE_BIT;
+
+	shadow_ux_mask		=
+		has_guest_exec_ctrl ? VMX_EPT_USER_EXECUTABLE_MASK : 0ull;
+
 	/*
 	 * EPT overrides the host MTRRs, and so KVM must program the desired
 	 * memtype directly into the SPTEs.  Note, this mask is just the mask
@@ -484,6 +498,7 @@ void kvm_mmu_reset_all_pte_masks(void)
 	shadow_dirty_mask	= PT_DIRTY_MASK;
 	shadow_nx_mask		= PT64_NX_MASK;
 	shadow_x_mask		= 0;
+	shadow_ux_mask		= 0;
 	shadow_present_mask	= PT_PRESENT_MASK;
 
 	/*
