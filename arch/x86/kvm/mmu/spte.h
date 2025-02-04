@@ -346,9 +346,20 @@ static inline bool is_last_spte(u64 pte, int level)
 	return (level == PG_LEVEL_4K) || is_large_pte(pte);
 }
 
-static inline bool is_executable_pte(u64 spte)
+static inline bool is_executable_pte(u64 spte, bool for_kernel_mode,
+				     struct kvm_vcpu *vcpu)
 {
-	return (spte & (shadow_x_mask | shadow_nx_mask)) == shadow_x_mask;
+	u64 x_mask = shadow_x_mask;
+
+	if (vcpu->arch.pt_guest_exec_control) {
+		x_mask |= shadow_ux_mask;
+		if (for_kernel_mode)
+			x_mask &= ~VMX_EPT_USER_EXECUTABLE_MASK;
+		else
+			x_mask &= ~VMX_EPT_EXECUTABLE_MASK;
+	}
+
+	return (spte & (x_mask | shadow_nx_mask)) == x_mask;
 }
 
 static inline kvm_pfn_t spte_to_pfn(u64 pte)

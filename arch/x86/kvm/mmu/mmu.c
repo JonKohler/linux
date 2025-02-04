@@ -2951,7 +2951,7 @@ static int mmu_set_spte(struct kvm_vcpu *vcpu, struct kvm_memory_slot *slot,
 		ret = RET_PF_SPURIOUS;
 	} else {
 		flush |= mmu_spte_update(sptep, spte);
-		trace_kvm_mmu_set_spte(level, gfn, sptep);
+		trace_kvm_mmu_set_spte(vcpu, level, gfn, sptep);
 	}
 
 	if (wrprot && write_fault)
@@ -3430,10 +3430,11 @@ static bool fast_pf_fix_direct_spte(struct kvm_vcpu *vcpu,
 	return true;
 }
 
-static bool is_access_allowed(struct kvm_page_fault *fault, u64 spte)
+static bool is_access_allowed(struct kvm_page_fault *fault, u64 spte,
+			      struct kvm_vcpu *vcpu)
 {
 	if (fault->exec)
-		return is_executable_pte(spte);
+		return is_executable_pte(spte, !fault->user, vcpu);
 
 	if (fault->write)
 		return is_writable_pte(spte);
@@ -3514,7 +3515,7 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault)
 		 * Need not check the access of upper level table entries since
 		 * they are always ACC_ALL.
 		 */
-		if (is_access_allowed(fault, spte)) {
+		if (is_access_allowed(fault, spte, vcpu)) {
 			ret = RET_PF_SPURIOUS;
 			break;
 		}
@@ -3561,7 +3562,7 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault)
 
 		/* Verify that the fault can be handled in the fast path */
 		if (new_spte == spte ||
-		    !is_access_allowed(fault, new_spte))
+		    !is_access_allowed(fault, new_spte, vcpu))
 			break;
 
 		/*

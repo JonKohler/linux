@@ -1056,7 +1056,7 @@ static int tdp_mmu_map_handle_target_level(struct kvm_vcpu *vcpu,
 				     new_spte);
 		ret = RET_PF_EMULATE;
 	} else {
-		trace_kvm_mmu_set_spte(iter->level, iter->gfn,
+		trace_kvm_mmu_set_spte(vcpu, iter->level, iter->gfn,
 				       rcu_dereference(iter->sptep));
 	}
 
