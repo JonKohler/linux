@@ -2670,6 +2670,7 @@ static int setup_vmcs_config(struct vmcs_config *vmcs_conf,
 			return -EIO;
 
 		vmx_cap->ept = 0;
+		_cpu_based_2nd_exec_control &= ~SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
 		_cpu_based_2nd_exec_control &= ~SECONDARY_EXEC_EPT_VIOLATION_VE;
 	}
 	if (!(_cpu_based_2nd_exec_control & SECONDARY_EXEC_ENABLE_VPID) &&
@@ -4617,11 +4618,15 @@ static u32 vmx_secondary_exec_control(struct vcpu_vmx *vmx)
 		exec_control &= ~SECONDARY_EXEC_ENABLE_VPID;
 	if (!enable_ept) {
 		exec_control &= ~SECONDARY_EXEC_ENABLE_EPT;
+		exec_control &= ~SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
 		exec_control &= ~SECONDARY_EXEC_EPT_VIOLATION_VE;
 		enable_unrestricted_guest = 0;
 	}
 	if (!enable_unrestricted_guest)
 		exec_control &= ~SECONDARY_EXEC_UNRESTRICTED_GUEST;
+	if (!enable_pt_guest_exec_control)
+		exec_control &= ~SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
+
 	if (kvm_pause_in_guest(vmx->vcpu.kvm))
 		exec_control &= ~SECONDARY_EXEC_PAUSE_LOOP_EXITING;
 	if (!kvm_vcpu_apicv_active(vcpu))
@@ -4746,6 +4751,9 @@ static void init_vmcs(struct vcpu_vmx *vmx)
 		if (vmx->ve_info)
 			vmcs_write64(VE_INFORMATION_ADDRESS,
 				     __pa(vmx->ve_info));
+
+		vmx->vcpu.arch.pt_guest_exec_control =
+			enable_pt_guest_exec_control && vmx_has_mbec(vmx);
 	}
 
 	if (cpu_has_tertiary_exec_ctrls())
@@ -8437,6 +8445,9 @@ __init int vmx_hardware_setup(void)
 
 	if (!cpu_has_vmx_unrestricted_guest() || !enable_ept)
 		enable_unrestricted_guest = 0;
+
+	if (!cpu_has_vmx_mbec() || !enable_ept)
+		enable_pt_guest_exec_control = false;
 
 	if (!cpu_has_vmx_flexpriority())
 		flexpriority_enabled = 0;

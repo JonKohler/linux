@@ -577,6 +577,7 @@ static inline u8 vmx_get_rvi(void)
 	 SECONDARY_EXEC_ENABLE_VMFUNC |					\
 	 SECONDARY_EXEC_BUS_LOCK_DETECTION |				\
 	 SECONDARY_EXEC_NOTIFY_VM_EXITING |				\
+	 SECONDARY_EXEC_MODE_BASED_EPT_EXEC |				\
 	 SECONDARY_EXEC_ENCLS_EXITING |					\
 	 SECONDARY_EXEC_EPT_VIOLATION_VE)
 
@@ -716,6 +717,12 @@ static inline bool vmx_has_waitpkg(struct vcpu_vmx *vmx)
 {
 	return secondary_exec_controls_get(vmx) &
 		SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE;
+}
+
+static inline bool vmx_has_mbec(struct vcpu_vmx *vmx)
+{
+	return secondary_exec_controls_get(vmx) &
+		SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
 }
 
 static inline bool vmx_need_pf_intercept(struct kvm_vcpu *vcpu)
