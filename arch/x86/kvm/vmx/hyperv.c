@@ -138,7 +138,10 @@ void nested_evmcs_filter_control_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *
 		ctl_high &= evmcs_get_supported_ctls(EVMCS_EXEC_CTRL);
 		break;
 	case MSR_IA32_VMX_PROCBASED_CTLS2:
-		ctl_high &= evmcs_get_supported_ctls(EVMCS_2NDEXEC);
+		supported_ctrls = evmcs_get_supported_ctls(EVMCS_2NDEXEC);
+		if (!vcpu->arch.pt_guest_exec_control)
+			supported_ctrls &= ~SECONDARY_EXEC_MODE_BASED_EPT_EXEC;
+		ctl_high &= supported_ctrls;
 		break;
 	case MSR_IA32_VMX_TRUE_PINBASED_CTLS:
 	case MSR_IA32_VMX_PINBASED_CTLS:
