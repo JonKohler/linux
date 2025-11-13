@@ -999,6 +999,102 @@ static unsigned int run_ebpf_filter(struct tun_struct *tun,
 	return len;
 }
 
+static __always_unused int tun_ring_produce(struct ptr_ring *ring,
+			    struct netdev_queue *queue,
+			    struct sk_buff *skb)
+{
+	int ret;
+
+	spin_lock(&ring->producer_lock);
+
+	/* Pairs with smp_wmb() in __tun_ring_consume/__tap_ring_consume.
+	 * Ensures that freed space by the consumer is visible.
+	 */
+	smp_rmb();
+
+	/* Do not stop the netdev queue if the ptr_ring is full already.
+	 * The consumer could empty out the ptr_ring in the meantime
+	 * without noticing the stopped netdev queue, resulting in a
+	 * stopped netdev queue and an empty ptr_ring. In this case the
+	 * netdev queue would stay stopped forever.
+	 */
+	if (unlikely(!__ptr_ring_full(ring) &&
+		     __ptr_ring_full_next(ring)))
+		netif_tx_stop_queue(queue);
+
+	/* Note: __ptr_ring_produce has an internal smp_wmb() to synchronize the state
+	 * with the consumer. This ensures that after adding an entry to the ring,
+	 * any stopped queue state is visible to the consumer after dequeueing.
+	 */
+	ret = __ptr_ring_produce(ring, skb);
+
+	spin_unlock(&ring->producer_lock);
+
+	return ret;
+}
+
+/*
+ * Consume a packet from the transmit ring. Callers must hold
+ * the consumer_lock of the ptr_ring. If the ring was full and the
+ * queue was stopped, this may wake up the queue if space is created.
+ */
+static void *__tun_ring_consume(struct tun_file *tfile)
+{
+	struct ptr_ring *ring = &tfile->tx_ring;
+	struct netdev_queue *txq;
+	struct net_device *dev;
+	bool stopped;
+	void *ptr;
+
+	ptr = __ptr_ring_peek(ring);
+	if (!ptr)
+		return ptr;
+
+	/* Paired with smp_wmb() of __ptr_ring_consume, called in
+	 * __tun_ring_produce. Ensures visibility of a stopped netdev
+	 * queue due to a full ptr_ring.
+	 */
+	smp_rmb();
+	rcu_read_lock();
+	dev = rcu_dereference(tfile->tun)->dev;
+	txq = netdev_get_tx_queue(dev, tfile->queue_index);
+	stopped = netif_tx_queue_stopped(txq);
+
+	/* This unpaired smp_rmb() ensures that the read for a stopped
+	 * netdev queue is done before discarding elements from the
+	 * ptr_ring. This is required for the waking logic below.
+	 */
+	smp_rmb();
+	__ptr_ring_discard_one(ring);
+
+	/* If the queue was stopped (meaning the producer couldn't have
+	 * inserted new entries just now), and we have actually created
+	 * space (ring wasn't already empty), or the ring is now empty,
+	 * then it is now safe to wake the queue.
+	 */
+	if (unlikely(stopped &&
+		     (__ptr_ring_consume_created_space(ring) ||
+		      __ptr_ring_empty(ring)))) {
+		/* Paired with smp_rmb() in tun_ring_produce. */
+		smp_wmb();
+		netif_tx_wake_queue(txq);
+	}
+	rcu_read_unlock();
+
+	return ptr;
+}
+
+static void __always_unused *tun_ring_consume(struct tun_file *tfile)
+{
+	void *ptr;
+
+	spin_lock(&tfile->tx_ring.consumer_lock);
+	ptr = __tun_ring_consume(tfile);
+	spin_unlock(&tfile->tx_ring.consumer_lock);
+
+	return ptr;
+}
+
 /* Net device start xmit */
 static netdev_tx_t tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 {
